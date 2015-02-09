@@ -1,4 +1,3 @@
-
 import ufo_parameters as up
 
 p = up.UfoParams(
@@ -13,6 +12,5 @@ p = up.UfoParams(
     gamma=1.6666666666,
 )
 
-
 p.print_all()
-#p.print_scalings() 
+# p.print_scalings()
