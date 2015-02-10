@@ -32,19 +32,9 @@ class UfoParams():
     are required, PhysNorm classes should be used.
     """
 
-    def __init__(self,
-                 power=4.e43,
-                 angle=30,
-                 speed=0.03,
-                 mdot=0.1,
-                 rufo=0.000001,
-                 wufo=0.0000002,
-                 dens_ambient=1.0,
-                 temp_ambient=1.e7,
-                 gamma=1.6666666666,
-                 norm=norm.PhysNorm(x=pc.kpc, t=pc.kyr, dens=0.6165 * pc.amu,
-                                    temp=(pc.kpc / pc.kyr) ** 2 * pc.amu / pc.kboltz, curr=1)
-    ):
+    def __init__(self, power=1.e44, angle=30, speed=0.03, mdot=0.1, rufo=0.1, dens_ambient=1.0, temp_ambient=1.e7,
+                 gamma=1.6666666666, norm=norm.PhysNorm(x=pc.kpc, t=pc.kyr, dens=0.6165 * pc.amu,
+                                                        temp=(pc.kpc / pc.kyr) ** 2 * pc.amu / pc.kboltz, curr=1)):
         """
         Parameters
 
@@ -53,14 +43,13 @@ class UfoParams():
           speed                Ufo speed (in c)
           mdot                 Ufo mass outflow rate (Msun/yr)
           rufo                 Ufo radius (kpc)
-          wufo                 Ufo outflow annulus thickness (kpc)
           temp_ambient         Reference temperature of background ISM (K).
           dens_ambient         Reference density of background ISM (amu*mu, mean 
                                mass per particle). 
           gamma                Adiabiatic index non-relativistic
           norm                 Normalization object for output. 
                                Internally all units are brought to this base too.
-
+jj
         """
 
         # All attributes in class are stored in dictionary
@@ -81,7 +70,6 @@ class UfoParams():
             ('speed', ('v', 'Ufo speed')),
             ('mdot', ('mdot', 'Ufo mass outflow rate')),
             ('rufo', ('x', 'Ufo radius')),
-            ('wufo', ('x', 'Width of launching region')),
             ('temp_ambient', ('temp', 'Reference temperature of background ISM.')),
             ('dens_ambient', ('dens', 'Reference density of background ISM.')),
             ('gamma', ('none', 'Adiabiatic index')),
@@ -100,9 +88,6 @@ class UfoParams():
             ('enth', ('eint', 'Ufo Specific enthalpy')),
             ('pdot', ('pdot', 'Ufo Momentum injection rate.')),
             ('pflx', ('pres', 'Ufo Momentum flux.')),
-            ('r1', ('x', 'Inner wind launching radius.')),
-            ('r2', ('x', 'Outer wind launching radius.')),
-            ('delta', ('x', 'w projected onto disc.'))
         ])
 
         # Capture normalization object
@@ -127,7 +112,6 @@ class UfoParams():
         args['speed'] = args['speed'] * pc.c / getattr(self.norm, self.defs['speed'][0])
         args['mdot'] = args['mdot'] * pc.msun / pc.yr / getattr(self.norm, self.defs['mdot'][0])
         args['rufo'] = args['rufo'] * pc.kpc / getattr(self.norm, self.defs['rufo'][0])
-        args['wufo'] = args['wufo'] * pc.kpc / getattr(self.norm, self.defs['wufo'][0])
         args['dens_ambient'] = args['dens_ambient'] * self.mua * pc.amu / getattr(self.norm, self.defs['dens_ambient'][0])
         args['temp_ambient'] = args['temp_ambient'] / getattr(self.norm, self.defs['temp_ambient'][0])
         self.__dict__.update(args)
@@ -259,68 +243,68 @@ class UfoParams():
         pres_ambient = self.eqn_pres_ambient(dens_ambient, temp_ambient)
         return np.sqrt(gamma * pres_ambient / dens_ambient)
 
-    def eqn_area(self, rufo=None, wufo=None):
-        """
-        Area does not depend on angle!
-        """
-        if rufo is None: rufo = self.rufo
-        if wufo is None: wufo = self.wufo
-        return 2 * np.pi * rufo * wufo
+    def eqn_area(self, rufo=None, alpha=None):
+        if rufo is None: rufo = self.rjet
+        if alpha is None: alpha = self.alpha
+        if alpha > 1.e-30:
+            return 2. * np.pi * (1. - np.cos(alpha)) * pow(rufo / np.sin(alpha), 2)
+        else:
+            return np.pi * rufo * rufo
 
-    def eqn_pres(self, power=None, speed=None, mdot=None, rufo=None, wufo=None, gamma=None):
+
+    def eqn_pres(self, power=None, speed=None, mdot=None, rufo=None, alpha=None, gamma=None):
         if power is None: power = self.power
         if speed is None: speed = self.speed
         if mdot is None: mdot = self.mdot
+        if alpha is None: alpha = self.alpha
         if rufo is None: rufo = self.rufo
-        if wufo is None: wufo = self.wufo
         if gamma is None: gamma = self.gamma
 
-        area = self.eqn_area(rufo, wufo)
+        area = self.eqn_area(rufo, alpha)
         return (power - 0.5 * mdot * speed ** 2) * (gamma - 1) / (gamma * area * speed)
 
-    def eqn_eflx(self, power=None, rufo=None, wufo=None):
+    def eqn_eflx(self, power=None, rufo=None, alpha=None):
         if power is None: power = self.power
-        if wufo is None: wufo = self.wufo
-        area = self.eqn_area(rufo, wufo)
+        if alpha is None: alpha = self.alpha
+        area = self.eqn_area(rufo, alpha)
         return power / area
 
-    def eqn_dens(self, speed=None, mdot=None, rufo=None, wufo=None):
+    def eqn_dens(self, speed=None, mdot=None, rufo=None, alpha=None):
         if speed is None: speed = self.speed
         if mdot is None: mdot = self.mdot
         if rufo is None: rufo = self.rufo
-        if wufo is None: wufo = self.wufo
+        if alpha is None: alpha = self.alpha
 
-        area = self.eqn_area(rufo, wufo)
+        area = self.eqn_area(rufo, alpha)
         return mdot / (area * speed)
 
-    def eqn_temp(self, power=None, speed=None, mdot=None, rufo=None, wufo=None,
-                 gamma=None, muu=None):
+    def eqn_temp(self, power=None, speed=None, mdot=None, rufo=None, alpha=None, gamma=None, muu=None):
         if power is None: power = self.power
         if speed is None: speed = self.speed
         if mdot is None: mdot = self.mdot
         if rufo is None: rufo = self.rufo
-        if wufo is None: wufo = self.wufo
+        if alpha is None: alpha = self.alpha
         if gamma is None: gamma = self.gamma
         if muu is None: muu = self.muu
 
-        dens = self.eqn_pres(power, speed, mdot, rufo, wufo, gamma)
-        pres = self.eqn_dens(speed, mdot, rufo, wufo)
+        pres = self.eqn_pres(power, speed, mdot, rufo, alpha, gamma)
+        dens = self.eqn_dens(speed, mdot, rufo, alpha)
 
         return self.eosu.temp_from_dens_pres(dens, pres, muu)
 
-    def eqn_vsnd(self, power=None, speed=None, mdot=None, rufo=None, wufo=None, gamma=None):
+    def eqn_vsnd(self, power=None, speed=None, mdot=None, rufo=None, alpha=None, gamma=None):
         if power is None: power = self.power
         if speed is None: speed = self.speed
         if mdot is None: mdot = self.mdot
         if rufo is None: rufo = self.rufo
-        if wufo is None: wufo = self.wufo
+        if alpha is None: alpha = self.alpha
         if gamma is None: gamma = self.gamma
 
-        dens = self.eqn_pres(power, speed, mdot, rufo, wufo, gamma)
-        pres = self.eqn_dens(speed, mdot, rufo, wufo)
+        pres = self.eqn_pres(power, speed, mdot, rufo, alpha, gamma)
+        dens = self.eqn_dens(speed, mdot, rufo, alpha)
         return np.sqrt(gamma * pres / dens)
 
-    def eqn_mach_internal(self, power=None, speed=None, mdot=None, rufo=None, wufo=None, gamma=None):
+    def eqn_mach_internal(self, power=None, speed=None, mdot=None, rufo=None, alpha=None, gamma=None):
         """
         internal mach number in ufo wind
         """
@@ -328,12 +312,10 @@ class UfoParams():
         if speed is None: speed = self.speed
         if mdot is None: mdot = self.mdot
         if rufo is None: rufo = self.rufo
-        if wufo is None: wufo = self.wufo
+        if alpha is None: alpha = self.alpha
         if gamma is None: gamma = self.gamma
 
-        pres = self.eqn_pres(power, speed, mdot, rufo, wufo, gamma)
-        dens = self.eqn_dens(speed, mdot, rufo, wufo)
-        vsnd = self.eqn_vsnd(pres, dens, gamma)
+        vsnd = self.eqn_vsnd(power, speed, mdot, rufo, alpha, gamma)
         return speed / vsnd
 
     def eqn_mach(self, speed=None, dens_ambient=None, temp_ambient=None, gamma=None):
@@ -348,63 +330,83 @@ class UfoParams():
         vsnd = self.eqn_vsnd_ambient(dens_ambient, temp_ambient, gamma)
         return speed / vsnd
 
-    def eqn_pratio(self, power=None, speed=None, mdot=None, rufo=None, wufo=None, gamma=None,
-                   dens_ambient=None, temp_ambient=None):
+    def eqn_pratio(self, power=None, speed=None, mdot=None, rufo=None, alpha=None, gamma=None, dens_ambient=None,
+                   temp_ambient=None):
         if power is None: power = self.power
         if speed is None: speed = self.speed
         if mdot is None: mdot = self.mdot
         if rufo is None: rufo = self.rufo
-        if wufo is None: wufo = self.wufo
+        if alpha is None: alpha = self.alpha
         if gamma is None: gamma = self.gamma
         if temp_ambient is None: temp_ambient = self.temp_ambient
         if dens_ambient is None: dens_ambient = self.dens_ambient
 
-        pres = self.eqn_pres(power, speed, mdot, rufo, wufo, gamma)
+        pres = self.eqn_pres(power, speed, mdot, rufo, alpha, gamma)
         pres_ambient = self.eqn_pres_ambient(dens_ambient, temp_ambient)
 
         return pres / pres_ambient
 
-    def eqn_dratio(self, speed=None, mdot=None, rufo=None, wufo=None, dens_ambient=None):
+    def eqn_dratio(self, speed=None, mdot=None, rufo=None, alpha=None, dens_ambient=None):
         if speed is None: speed = self.speed
         if mdot is None: mdot = self.mdot
         if rufo is None: rufo = self.rufo
-        if wufo is None: wufo = self.wufo
+        if alpha is None: alpha = self.alpha
         if dens_ambient is None: dens_ambient = self.dens_ambient
 
-        dens = self.eqn_dens(speed, mdot, rufo, wufo)
+        dens = self.eqn_dens(speed, mdot, rufo, alpha)
 
         return dens / dens_ambient
 
 
-    def eqn_eint(self, power=None, speed=None, mdot=None, rufo=None, wufo=None,
-                 gamma=None):
+    def eqn_eint(self, power=None, speed=None, mdot=None, rufo=None, alpha=None, gamma=None):
+        """
+        Specific internal energy
+
+        :param power:
+        :param speed:
+        :param mdot:
+        :param rufo:
+        :param alpha:
+        :param gamma:
+        :return:
+        """
 
         if power is None: power = self.power
         if speed is None: speed = self.speed
         if mdot is None: mdot = self.mdot
         if rufo is None: rufo = self.rufo
-        if wufo is None: wufo = self.wufo
+        if alpha is None: alpha = self.alpha
         if gamma is None: gamma = self.gamma
 
-        pres = self.eqn_pres(power, speed, mdot, rufo, wufo, gamma)
-        dens = self.eqn_dens(speed, mdot, rufo, wufo)
+        pres = self.eqn_pres(power, speed, mdot, rufo, alpha, gamma)
+        dens = self.eqn_dens(speed, mdot, rufo, alpha)
 
         return 1. / (gamma - 1.) * pres / dens
 
 
-    def eqn_enth(self, power=None, speed=None, mdot=None, rufo=None, wufo=None,
-                 gamma=None):
+    def eqn_enth(self, power=None, speed=None, mdot=None, rufo=None, alpha=None, gamma=None):
+        """
+        Specific enthalpy
+
+        :param power:
+        :param speed:
+        :param mdot:
+        :param rufo:
+        :param alpha:
+        :param gamma:
+        :return:
+        """
 
         if power is None: power = self.power
         if speed is None: speed = self.speed
         if mdot is None: mdot = self.mdot
         if rufo is None: rufo = self.rufo
-        if wufo is None: wufo = self.wufo
+        if alpha is None: alpha = self.alpha
         if gamma is None: gamma = self.gamma
 
-        pres = self.eqn_pres(power, speed, mdot, rufo, wufo, gamma)
-        dens = self.eqn_dens(speed, mdot, rufo, wufo)
-        eint = self.eqn_eint(power, speed, mdot, rufo, wufo, gamma)
+        pres = self.eqn_pres(power, speed, mdot, rufo, alpha, gamma)
+        dens = self.eqn_dens(speed, mdot, rufo, alpha)
+        eint = self.eqn_eint(power, speed, mdot, rufo, alpha, gamma)
 
         return eint + pres / dens
 
@@ -417,40 +419,17 @@ class UfoParams():
         return mdot * speed
 
 
-    def eqn_pflx(self, speed=None, mdot=None, rufo=None, wufo=None):
+    def eqn_pflx(self, speed=None, mdot=None, rufo=None, alpha=None):
 
         if speed is None: speed = self.speed
         if mdot is None: mdot = self.mdot
         if rufo is None: rufo = self.rufo
-        if wufo is None: wufo = self.wufo
+        if alpha is None: alpha = self.alpha
 
-        area = self.eqn_area(rufo, wufo)
+        area = self.eqn_area(rufo, alpha)
         pdot = self.eqn_pdot(speed, mdot)
 
         return pdot / area
 
-    def eqn_r1(self, angle=None, rufo=None, wufo=None):
-
-        if angle is None: angle = self.angle
-        if rufo is None: rufo = self.rufo
-        if wufo is None: wufo = self.wufo
-
-        return rufo - 0.5 * wufo / np.cos(np.pi / 180 * angle)
-
-    def eqn_r2(self, angle=None, rufo=None, wufo=None):
-
-        if angle is None: angle = self.angle
-        if rufo is None: rufo = self.rufo
-        if wufo is None: wufo = self.wufo
-
-        return rufo + 0.5 * wufo / np.cos(np.pi / 180 * angle)
-
-
-    def eqn_delta(self, angle=None, rufo=None, wufo=None):
-
-        if angle is None: angle = self.angle
-        if wufo is None: wufo = self.wufo
-
-        return wufo / np.cos(np.pi / 180 * angle)
 
 
